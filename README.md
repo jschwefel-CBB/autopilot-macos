@@ -1,9 +1,14 @@
-# autopilot
+# AutoPilot
 
 A deterministic, app-agnostic macOS GUI test driver. It executes declarative
 JSON test plans against any Mac app via the Accessibility API — no LLM in the
 execution path, so the same plan + same app build produces the same result
 every run.
+
+> The product is **AutoPilot**. The CLI binary, Swift targets, and repository
+> use lowercase/`Autopilot` spellings (`autopilot`, `AutopilotCore`,
+> `AutopilotMCP`) — those are technical identifiers and are intentionally left
+> as-is.
 
 ## What it does
 

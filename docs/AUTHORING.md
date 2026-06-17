@@ -1,8 +1,12 @@
-# Writing an autopilot Test Plan
+# Writing an AutoPilot Test Plan
 
-This is the canonical guide for authoring autopilot test plans. It is written to
+This is the canonical guide for authoring AutoPilot test plans. It is written to
 be usable by **both an AI agent and a human**. An agent working on a target app
 should be able to read this file and produce a valid, runnable plan.
+
+> **Naming:** the product is **AutoPilot**. The CLI binary is the lowercase
+> `autopilot` and the Swift targets are `AutopilotCore` / `AutopilotMCP` —
+> shown verbatim in command and code blocks below.
 
 A plan is a single JSON file describing a sequence of GUI steps and assertions.
 The executor runs it mechanically and deterministically — **there is no LLM in
@@ -14,7 +18,7 @@ same result every run.
 ## 1. The mental model
 
 ```
-You / an agent  ──writes──▶  plan.json  ──fed to──▶  autopilot  ──drives via AX──▶  the target app
+You / an agent  ──writes──▶  plan.json  ──fed to──▶  AutoPilot  ──drives via AX──▶  the target app
                                                           │
                                                           └──▶ report.json + artifacts (screenshots, AX dumps)
 ```
@@ -23,7 +27,7 @@ You / an agent  ──writes──▶  plan.json  ──fed to──▶  autopil
   nothing about your app beyond what the plan and the Accessibility (AX) tree
   tell it.
 - **Targeting is by accessibility, not pixels.** You name elements by their AX
-  role / identifier; autopilot finds them in the live AX tree. (A pixel-based
+  role / identifier; AutoPilot finds them in the live AX tree. (A pixel-based
   vision fallback exists for custom-drawn controls — see §7.)
 - **Everything polls.** Every step waits up to a timeout for its precondition
   (element present, etc.) — you never insert manual sleeps to "wait for the UI".
@@ -312,7 +316,7 @@ instead of the human summary).
 **Exit codes:** `0` pass · `1` test failure/error · `2` plan or parse error ·
 `3` Accessibility permission missing.
 
-**On failure**, autopilot writes a screenshot and an AX-tree snapshot into the
+**On failure**, AutoPilot writes a screenshot and an AX-tree snapshot into the
 artifacts dir next to `report.json`, plus `expected`/`actual` on the failing
 step — that's your debugging surface.
 
