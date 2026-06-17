@@ -1,6 +1,6 @@
 import AppKit
 
-final class AppController: NSObject, NSApplicationDelegate {
+final class AppController: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 360, height: 200),
         styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -16,6 +16,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         nameField.setAccessibilityIdentifier("nameField")
         nameField.target = self
         nameField.action = #selector(nameChanged)
+        nameField.delegate = self   // live updates on every keystroke
         content.addSubview(nameField)
 
         statusLabel.frame = NSRect(x: 20, y: 110, width: 320, height: 20)
@@ -38,6 +39,12 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     @objc func nameChanged() {
+        statusLabel.stringValue = "status: \(nameField.stringValue)"
+    }
+
+    // Live update on every keystroke so GUI tests can observe derived state
+    // without needing the field to commit (Enter / focus-loss).
+    func controlTextDidChange(_ obj: Notification) {
         statusLabel.stringValue = "status: \(nameField.stringValue)"
     }
 
