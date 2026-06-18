@@ -101,13 +101,17 @@ Each step is one action. Common shape:
 | `click` | **yes** | no | Single left click at the element's center. |
 | `doubleClick` | **yes** | no | Double click. |
 | `rightClick` | **yes** | no | Right click. |
-| `type` | **yes** | `text` | Clicks the element to focus it, then types `text` as unicode key events. |
-| `keyPress` | **yes** | `keys` | Sends a key chord, e.g. `"cmd+f"` (see §5). |
-| `setValue` | **yes** (AX element) | `text` | Sets the element's AX value directly (no keystrokes). Does **not** fire keystroke-driven side effects. |
+| `press` | **yes** | no | Performs the AX **press** action on the element. More robust than a coordinate click, and works for elements with no clickable frame. Prefer for buttons. |
+| `menu` | no | `menuPath` | Walks the menu bar by title path (e.g. `["View","Rainbow Brackets"]`) and invokes the item. **The only way to drive a menu command with no key equivalent** — a `click` cannot open a closed menu. |
+| `type` | **yes** | `text` (+ `clear`/`commit`) | Clicks the element to focus, then types `text`. `clear:true` selects-all+deletes first; `commit:true` presses Return after, firing end-editing (use for inline-rename fields). |
+| `keyPress` | **yes** | `keys` | Sends a key chord, e.g. `"cmd+f"`, `"cmd+,"` (see §5). |
+| `setValue` | **yes** (AX element) | `text` | Sets the element's AX value directly (no keystrokes). Does **not** fire the control's action / end-editing — use `type` with `commit` where the *commit* matters. |
 | `scroll` | **yes** | `deltaX`/`deltaY` | Scrolls by the given pixel deltas. |
+| `drag` | **yes** (source) | `to` | Drags from the source element to `to` (a destination selector). File drag-drop (`toFiles`) is **not supported** via synthetic events — use `target.launchFiles` instead. |
 | `waitFor` | **yes** | `present` | Waits until the element appears (`present: true`, default) or disappears (`present: false`). |
 | `screenshot` | no | `path` (optional) | Captures the main display to PNG (defaults into the artifacts dir). |
 | `assert` | **yes** | — (`assert` block) | Checks a property or presence (§4, assertions). |
+| `assertPixel` | optional | `color` (+ point) | Asserts a screen pixel's color (for visual features AX can't see — bracket colors, gutters). See §4. |
 | `wait` | no | `seconds` | Fixed delay. **Discouraged** — prefer `waitFor`. Use only as a last resort. |
 
 `args` fields (only the relevant ones are read per action):
@@ -115,11 +119,19 @@ Each step is one action. Common shape:
 | Field | Type | Used by |
 |---|---|---|
 | `text` | string | `type`, `setValue` |
+| `clear` | bool | `type` (select-all + delete before typing) |
+| `commit` | bool | `type` (press Return after, to fire end-editing) |
 | `keys` | string | `keyPress` (e.g. `"shift+cmd+a"`) |
+| `menuPath` | [string] | `menu` (e.g. `["View","Toggle Flag"]`) |
+| `to` | selector | `drag` (destination element) |
 | `deltaX`, `deltaY` | int | `scroll` |
 | `seconds` | number | `wait` |
 | `path` | string | `screenshot` (output PNG path) |
 | `present` | bool | `waitFor` (true = appears, false = disappears) |
+| `color` | string | `assertPixel` (expected `#RRGGBB`) |
+| `tolerance` | number | `assertPixel` (RGB distance, default 16) |
+| `offsetX`, `offsetY` | int | `assertPixel` (sample point = target center + offset) |
+| `atX`, `atY` | int | `assertPixel` (absolute sample point when no target) |
 
 ### Assertions
 
@@ -132,7 +144,8 @@ An `assert` step carries an `assert` block instead of (or alongside) plain args:
 ```
 
 **Properties** (`assert.property`): `value`, `title`, `enabled`, `focused`,
-`position`, `size`, `exists`.
+`position`, `size`, `exists`, `marked` (menu-item checkmark state — `"true"`/
+`"false"` from `AXMenuItemMarkChar`; the one observable signal of menu state).
 
 **Operators** (`assert.op`):
 
@@ -161,13 +174,21 @@ Notes:
 `keys` is a `+`-joined chord, case-insensitive. Modifiers: `cmd`/`command`,
 `shift`, `opt`/`option`/`alt`, `ctrl`/`control`. The final token is the key.
 
-Supported keys: letters `a`–`z`, digits `0`–`9`, and named keys `return`/`enter`,
-`tab`, `space`, `delete`, `escape`, `left`, `right`, `up`, `down`.
+Supported keys:
+- Letters `a`–`z`, digits `0`–`9`.
+- Punctuation: `,` `.` `/` `;` `'` `[` `]` `\` `` ` `` `-` `=` (and named aliases
+  `comma`, `period`, `slash`, `semicolon`, `quote`, `leftbracket`,
+  `rightbracket`, `backslash`, `grave`, `minus`, `equal`).
+- Named keys: `return`/`enter`, `tab`, `space`, `delete`, `forwarddelete`,
+  `escape`, `left`, `right`, `up`, `down`, `home`, `end`, `pageup`, `pagedown`,
+  `f1`–`f12`.
 
-Examples: `"cmd+s"`, `"shift+cmd+a"`, `"cmd+f"`, `"escape"`, `"ctrl+space"`.
+Examples: `"cmd+s"`, `"shift+cmd+a"`, `"cmd+f"`, `"cmd+,"` (Preferences),
+`"escape"`, `"cmd+pagedown"`.
 
-An unknown modifier or key is a plan/runtime error — keep chords to the supported
-set above.
+An unsupported key throws a distinct `unsupportedKey` error (not confused with a
+malformed-JSON parse error). The `+` key itself cannot be expressed in a chord
+(it is the separator).
 
 ---
 
@@ -417,3 +438,174 @@ depth-limited. The host plan's `target`/`defaults` win.
       `keyPress` has `args.keys`; `assert` has an `assert` block.
 - [ ] Last step is `terminate`.
 - [ ] `autopilot doctor` says Accessibility: OK.
+
+---
+
+## 13. Pixel-color assertion (`assertPixel`) — testing visual features
+
+Some of the most important things in an app are **invisible to the Accessibility
+API**: syntax-highlight colors, rainbow-bracket depth coloring, theme appearance,
+the line-number gutter. These are drawn pixels, not AX elements. `assertPixel`
+lets you verify them by sampling a screen pixel's color.
+
+```jsonc
+// Sample at a target element's center, offset by (dx, dy):
+{ "id": "bracket-is-gold", "action": "assertPixel",
+  "target": { "identifier": "editorTextView" },
+  "args": { "offsetX": 14, "offsetY": -3, "color": "#E5B567", "tolerance": 24 } }
+
+// Or sample an absolute screen point:
+{ "id": "gutter-visible", "action": "assertPixel",
+  "args": { "atX": 30, "atY": 200, "color": "#2B2B2B", "tolerance": 16 } }
+```
+
+- `color` is the expected `#RRGGBB`. The match is a deterministic Euclidean RGB
+  distance ≤ `tolerance` (default 16) — **no LLM**.
+- The sample point is `target` center + `(offsetX, offsetY)`, or absolute
+  `(atX, atY)` when no `target` is given.
+- It **polls**, so a color that settles a frame after the action still passes.
+- Use a **generous tolerance** (20–30): anti-aliasing, sub-pixel rendering, and
+  theme/display differences mean the exact pixel is rarely the exact hex. Pick a
+  sample point in the *solid interior* of the colored glyph/region, not its edge.
+
+**Limits:** exact hues are display- and theme-dependent; assert representative
+points with tolerance, not pixel-perfect equality. For dense visual checks,
+screenshot snapshot-testing in the app's own test suite is still the better tool.
+
+---
+
+## 14. Output & reports — what you get back
+
+Three surfaces:
+
+**1. Human summary (stdout, default).** Header + one line per step; a failing step
+shows `expected`/`actual` inline.
+```
+Plan: medit: type into editor  =>  PASS  (283ms)
+  [pass] wait-window (52ms)
+  [pass] type (113ms)
+  [pass] assert-value (89ms)
+  [pass] quit (29ms)
+```
+
+**2. Machine summary line (stderr, always).** For shell loops:
+```
+RESULT pass 4/4
+RESULT fail 3/4 (failed: assert-value)
+```
+
+**3. `report.json` (written to a per-plan subdirectory of `--artifacts`).**
+```jsonc
+{
+  "plan": "…", "result": "fail", "durationMs": 434,
+  "artifactsDir": "/…/artifacts/my-plan",
+  "permissions": { "accessibility": true, "automation": true },
+  "steps": [
+    { "id": "type", "result": "pass", "durationMs": 108 },
+    { "id": "assert-value", "result": "fail",
+      "expected": "hello", "actual": "",
+      "screenshot": "/…/assert-value.png",
+      "axDump": "/…/assert-value.axtree.json" }
+  ]
+}
+```
+`--json` prints this to stdout instead of the human summary.
+
+**Per-plan namespacing:** each plan's report and artifacts go in a slugified
+subdirectory (`<artifacts>/<plan-name-slug>/`), so running many plans into one
+`--artifacts` root never clobbers. AX dumps carry a `truncated` flag so a capped
+tree is never mistaken for a complete one.
+
+**Failure artifacts** (written only on failure): `<step>.png` (screenshot) and
+`<step>.axtree.json` (the AX tree autopilot saw). These are your debugging
+surface — read `actual`, the screenshot, and the tree to fix the plan or the app.
+
+**Exit codes:** `0` pass · `1` test failure/error · `2` plan/parse error ·
+`3` Accessibility permission missing.
+
+### Outcome vocabulary
+
+- **`pass`** — the step did what the plan said.
+- **`fail`** — the app didn't behave as asserted: an assertion mismatch, or a
+  targeted element that never resolved (not found / ambiguous / timed out). *Your
+  app or your selector is wrong.*
+- **`error`** — an infrastructure problem: launch failed, an AX action failed, an
+  unsupported key. *The harness couldn't run the step.*
+- **`skipped`** — not executed (e.g. after an earlier stop without `--keep-going`).
+
+`--keep-going` continues past a failing step instead of stopping at the first one;
+the overall result is still the worst step outcome.
+
+---
+
+## 15. AppKit → AX role cheat sheet
+
+What an AppKit control shows up as in the AX tree (use the right `role`):
+
+| AppKit class | AX role |
+|---|---|
+| `NSTextField` | `AXTextField` (label fields → `AXStaticText`) |
+| `NSTextView` | `AXTextArea` |
+| `NSButton` | `AXButton` (checkboxes → `AXCheckBox`) |
+| `NSPopUpButton` | `AXPopUpButton` / `AXMenuButton` |
+| `NSOutlineView` | `AXOutline` |
+| `NSTableView` rows / cells | `AXRow` / `AXCell` |
+| `NSMenuItem` | `AXMenuItem` |
+| `NSRulerView` (line-number gutter) | **not a discrete AX element** |
+| custom-drawn views | often nothing — use `assertPixel` / `vision` |
+
+Discover the truth for *your* app with `dump_axtree` (§8); don't guess.
+
+---
+
+## 16. What is NOT observable via AX (don't try to assert these)
+
+These have no AX representation — asserting them wastes time. Use the noted
+alternative:
+
+- **Syntax-highlight / rainbow-bracket colors, caret emphasis** — layout-manager
+  temporary attributes. → `assertPixel`, or snapshot-test in the app.
+- **Line-number gutter, ruler views** — not AX elements. → `assertPixel`, or a
+  headless test of the toggle's state.
+- **Menu checkmark *visual*** — but `AXMenuItemMarkChar` *is* readable via the
+  `marked` assert property. Prefer asserting the **side effect** of a toggle.
+- **Theme/appearance, fonts, invisibles rendering, window chrome** — pure
+  drawing. → `assertPixel` for representative points, or manual/snapshot checks.
+- **A "hidden" pane that stays in the tree** (e.g. a collapsed sidebar) — assert
+  its `size`/`position` (zero width) rather than `notExists`, since the element
+  may persist after being hidden.
+
+---
+
+## 17. Troubleshooting (symptom → cause → fix)
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `assert … actual=` (empty) | the value was read before it propagated | already mitigated — asserts poll; raise `timeoutMs` if needed |
+| `Selector matched N elements (expected 1)` | ambiguous selector | add an `identifier`, or a more specific role/title; the error lists the matches |
+| `No element matched selector` | wrong selector, or element not yet present | check with `dump_axtree`; ensure a `waitFor` precedes it |
+| `Unsupported key in chord: X` | key not in the map | use a supported key (§5); punctuation is supported now |
+| exit `3` / `Accessibility: MISSING` | no AX permission | run `autopilot doctor`; grant Accessibility to the runner |
+| `Included plan not found … (resolved to /abs/path)` | include path is relative to the **plan file**, not CWD | fix the relative path (the error shows the resolved candidate) |
+| a menu item "click" passes but nothing happens | `click` can't open a closed menu | use the `menu` action instead |
+| `setValue` then Return doesn't commit | `setValue` fires no action | use `type` with `"commit": true` |
+| keystrokes dropped on the first step | (mitigated) app not yet key | the runner now activates + waits; ensure a `waitFor` window step first |
+
+---
+
+## 18. Sidebar/pane "hide" and other persistence gotchas
+
+When a view is *hidden* rather than *removed*, it often stays in the AX tree, so
+`assert notExists` won't fire. Assert its geometry instead:
+
+```jsonc
+{ "id": "sidebar-collapsed", "action": "assert",
+  "target": { "identifier": "sidebarOutline" },
+  "assert": { "property": "size", "op": "equals", "expected": "0,0" } }
+```
+
+Similarly, document-based apps re-open the last document via state restoration /
+autosave even with an app-side `--reset-state` that only wipes defaults. For a
+clean baseline, the app's test flag should *also* disable
+`NSQuitAlwaysKeepsWindows`, clear saved window state, and delete autosaved
+documents — wiping `UserDefaults` alone is not enough.

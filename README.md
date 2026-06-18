@@ -12,14 +12,22 @@ every run.
 
 ## What it does
 
-- Drives any macOS app: launch, click, type, key chords, scroll, wait, assert.
+- Drives any macOS app: launch, click, **press**, **menu**, type, key chords,
+  **drag**, scroll, wait, assert.
 - **Plan-as-contract:** an offline author (agent or human) writes a JSON plan;
   the executor runs it mechanically and reports structured results + failure
   artifacts (screenshots, AX-tree snapshots).
 - **AX-first targeting** with a deterministic vision fallback (normalized
   cross-correlation template match) for custom-drawn controls.
-- Two front-ends over one shared core: a **CLI** and an **MCP server**.
-- Plan composition via `include`.
+- **Pixel-color assertions** for visual features the Accessibility API can't see
+  (syntax colors, rainbow brackets, gutters).
+- **Menu-bar navigation** drives commands with no key equivalent; reads menu
+  checkmark state.
+- Value assertions **poll** until they match (no flaky one-shot reads); the app
+  is **activated** before input so keystrokes aren't dropped.
+- Two front-ends over one shared core: a **CLI** and an **MCP server**
+  (`run_plan`, `get_report`, `dump_axtree`).
+- Plan composition via `include`; per-plan artifact namespacing.
 
 ## Layout
 
