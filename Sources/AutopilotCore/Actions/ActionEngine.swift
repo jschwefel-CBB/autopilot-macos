@@ -34,6 +34,20 @@ public struct ActionEngine {
         let parts = s.lowercased().split(separator: "+").map(String.init)
         guard let keyToken = parts.last else { throw PlanError.decode("empty key chord") }
         var flags: CGEventFlags = []
+        // `+` is the separator, so the plus key is spelled `plus` and implies
+        // Shift (it is Shift+`=` on an ANSI layout), e.g. "cmd+plus" for zoom-in.
+        if keyToken == "plus" {
+            for mod in parts.dropLast() {
+                switch mod {
+                case "cmd", "command": flags.insert(.maskCommand)
+                case "shift": flags.insert(.maskShift)
+                case "opt", "option", "alt": flags.insert(.maskAlternate)
+                case "ctrl", "control": flags.insert(.maskControl)
+                default: throw PlanError.unsupportedKey("modifier '\(mod)'")
+                }
+            }
+            return Chord(virtualKey: 24, flags: flags.union(.maskShift))   // Shift+'='
+        }
         for mod in parts.dropLast() {
             switch mod {
             case "cmd", "command": flags.insert(.maskCommand)

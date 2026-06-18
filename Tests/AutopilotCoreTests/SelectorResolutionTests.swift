@@ -74,6 +74,14 @@ import Foundation
         #expect(try ActionEngine.parseChord("f1").virtualKey == 122)
         #expect(try ActionEngine.parseChord("cmd+f12").flags.contains(.maskCommand))
     }
+
+    @Test func parsesPlusKeyWithImplicitShift() throws {
+        // The + key (Shift+=) is spelled `plus` since + is the chord separator.
+        let chord = try ActionEngine.parseChord("cmd+plus")
+        #expect(chord.virtualKey == 24)                  // '=' base key
+        #expect(chord.flags.contains(.maskCommand))
+        #expect(chord.flags.contains(.maskShift))        // implicit
+    }
 }
 
 @Suite struct VisionPathTests {
