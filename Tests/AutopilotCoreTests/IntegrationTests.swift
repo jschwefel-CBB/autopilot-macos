@@ -105,6 +105,42 @@ import ApplicationServices
         #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
 
+    @Test func typeIntoSearchFieldViaKeycodes() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else {
+            Issue.record("TestHostApp.app not built. Run: Fixtures/TestHostApp/make-app.sh")
+            return
+        }
+        killExistingTestHostApps()
+        defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-sf-\(UUID().uuidString)")
+        let plan = Plan(
+            schemaVersion: "1.0",
+            name: "host: type into search field",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor,
+                     target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                // focus:false — the app already made the search field first
+                // responder; keycode-based type must land text in its field editor.
+                Step(id: "type-search", action: .type,
+                     target: Selector(identifier: "searchField"),
+                     args: { var a = ActionArgs(); a.text = "Query 9"; a.focus = false; return a }()),
+                Step(id: "assert-search", action: .assert,
+                     target: Selector(identifier: "searchField"),
+                     assert: Assertion(property: .value, op: .equals, expected: "Query 9")),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
     @Test func checkboxNumericValueIsReadable() async throws {
         guard AXIsProcessTrusted() else { return }
         let binary = testHostApp()

@@ -18,14 +18,26 @@ public enum EventSynthesizer {
 
     /// Type a string as unicode keyboard events (works regardless of layout).
     public static func type(_ text: String) {
-        for scalar in text.unicodeScalars {
-            var ch = UniChar(scalar.value > 0xFFFF ? 0 : scalar.value)
+        for ch in text {
+            if let (code, shift) = KeyMap.keyCode(for: ch) {
+                // Virtual-key events — accepted by field editors (NSSearchField)
+                // that ignore keyboardSetUnicodeString events.
+                keyChord(virtualKey: code, flags: shift ? .maskShift : [])
+            } else {
+                typeUnicode(ch)   // fallback for non-ANSI characters
+            }
+        }
+    }
+
+    /// Fallback: synthesize a character via its unicode string (for characters
+    /// not in the ANSI keycode map, e.g. accented letters).
+    private static func typeUnicode(_ ch: Character) {
+        for scalar in ch.unicodeScalars where scalar.value <= 0xFFFF {
+            var u = UniChar(scalar.value)
             let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true)
             let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false)
-            if scalar.value <= 0xFFFF {
-                down?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &ch)
-                up?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &ch)
-            }
+            down?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &u)
+            up?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &u)
             down?.post(tap: .cghidEventTap)
             up?.post(tap: .cghidEventTap)
         }

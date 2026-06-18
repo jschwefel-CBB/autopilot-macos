@@ -38,6 +38,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSTextFieldDelegate 
         check.setAccessibilityIdentifier("flagCheckbox")
         content.addSubview(check)
 
+        // An NSSearchField — its editing happens in a child field editor, so it
+        // exercises the keycode-based `type` path (unicode-string events fail here).
+        let search = NSSearchField(frame: NSRect(x: 20, y: 0, width: 200, height: 24))
+        search.setAccessibilityIdentifier("searchField")
+        content.addSubview(search)
+        // Make it first responder so focus:false typing targets it directly.
+        DispatchQueue.main.async { self.window.makeFirstResponder(search) }
+
         window.contentView = content
         window.center()
         window.makeKeyAndOrderFront(nil)
