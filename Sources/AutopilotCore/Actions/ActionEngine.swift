@@ -79,7 +79,17 @@ public struct ActionEngine {
         case .type:
             guard let text = args?.text else { throw PlanError.decode("type needs text") }
             if let ref, let p = point(for: ref) { EventSynthesizer.click(at: p) } // focus first
+            if args?.clear == true {
+                // Select-all (Cmd-A) then delete, so the field starts empty.
+                EventSynthesizer.keyChord(virtualKey: 0, flags: .maskCommand)   // Cmd-A ('a' == 0)
+                EventSynthesizer.keyChord(virtualKey: 51, flags: [])            // Delete
+            }
             EventSynthesizer.type(text)
+            if args?.commit == true {
+                // Press Return to fire the control's end-editing / target-action,
+                // so inline-edit fields (rename, etc.) actually commit the value.
+                EventSynthesizer.keyChord(virtualKey: 36, flags: [])            // Return
+            }
         case .setValue:
             guard let text = args?.text, case .ax(let el)? = ref else { throw PlanError.decode("setValue needs AX element + text") }
             AXUIElementSetAttributeValue(el, kAXValueAttribute as CFString, text as CFString)

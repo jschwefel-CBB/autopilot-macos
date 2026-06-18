@@ -24,5 +24,7 @@ public struct ActionArgs: Codable, Equatable, Sendable {
     public var menuPath: [String]?    // menu: ["View", "Rainbow Brackets"]
     public var to: Selector?          // drag: destination element
     public var toFiles: [String]?     // drag: file paths to drag onto the target (DnD)
+    public var commit: Bool?          // type: press Return after typing to fire end-editing
+    public var clear: Bool?           // type: select-all + delete before typing
     public init() {}
 }
