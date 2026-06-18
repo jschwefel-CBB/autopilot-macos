@@ -59,4 +59,19 @@ public struct AppLauncher {
     public func terminate(_ app: LaunchedApp) {
         app.runningApp.terminate()
     }
+
+    /// Bring the app frontmost and poll until it is active, so synthesized
+    /// keystrokes land on its key window rather than a not-yet-foreground one.
+    /// Returns whether the app became active within the timeout.
+    @discardableResult
+    public func activate(_ app: LaunchedApp, timeoutMs: Int, intervalMs: Int,
+                         clock: Clock = SystemClock()) -> Bool {
+        let poller = Poller(clock: clock)
+        return poller.waitUntil(timeoutMs: timeoutMs, intervalMs: intervalMs) {
+            if !app.runningApp.isActive {
+                app.runningApp.activate(options: [.activateAllWindows])
+            }
+            return app.runningApp.isActive
+        }
+    }
 }

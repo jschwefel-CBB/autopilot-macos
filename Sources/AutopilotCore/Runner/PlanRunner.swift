@@ -43,6 +43,9 @@ public struct PlanRunner {
         // Give the app a beat to register its AX tree (polled, not a fixed sleep).
         _ = targeting.waitForPresence(Selector(role: "AXWindow"), present: true,
                                       app: appElement, timeoutMs: timeoutMs, intervalMs: intervalMs)
+        // Bring the app frontmost and wait until it is key, so the first
+        // synthesized keystroke/click is not dropped on a not-yet-active window.
+        _ = launcher.activate(launched, timeoutMs: timeoutMs, intervalMs: intervalMs, clock: clock)
 
         for step in plan.steps {
             let stepTimeout = step.timeoutMs ?? timeoutMs
