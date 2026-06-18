@@ -77,8 +77,12 @@ AI agent and a human.
 macOS 14+, Swift 6 toolchain, and Accessibility permission granted to the
 process (or terminal) running `autopilot` — `autopilot doctor` checks this.
 
-## Design
+## Design & roadmap
 
-See the design spec and implementation plan in the companion `medit` repo
-(`docs/specs/2026-06-16-gui-test-driver-design.md`,
-`docs/plans/2026-06-16-autopilot.md`).
+- **Authoring guide:** [docs/AUTHORING.md](docs/AUTHORING.md) — how to write plans.
+- **Roadmap:** [docs/ROADMAP.md](docs/ROADMAP.md) — candidate work for future versions.
+- **Consumer feedback & dispositions:** [docs/feedback-response.md](docs/feedback-response.md),
+  [docs/review-findings.md](docs/review-findings.md).
+- Original design spec and implementation plan live in the companion `medit` repo
+  (`docs/specs/2026-06-16-gui-test-driver-design.md`,
+  `docs/plans/2026-06-16-autopilot.md`).
