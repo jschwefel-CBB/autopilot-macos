@@ -121,12 +121,18 @@ public struct PlanRunner {
             return StepResult(id: step.id, result: .fail, durationMs: 0,
                               message: "cannot assert property on vision-only element")
         }
-        let actual = assertions.readProperty(assertion.property, from: el) ?? ""
         let expected = assertion.expected ?? ""
-        let ok = assertions.evaluate(op: assertion.op, actual: actual, expected: expected)
-        var result = StepResult(id: step.id, result: ok ? .pass : .fail, durationMs: 0,
-                                expected: expected, actual: actual)
-        if !ok {
+        // Poll the comparison on the same cadence as presence — a control's AX
+        // value may update a beat after the action that triggered it. Succeed as
+        // soon as it matches; only fail (and capture artifacts) at timeout.
+        let outcome = assertions.pollEvaluate(
+            op: assertion.op, expected: expected,
+            timeoutMs: timeoutMs, intervalMs: intervalMs, clock: clock
+        ) { assertions.readProperty(assertion.property, from: el) ?? "" }
+
+        var result = StepResult(id: step.id, result: outcome.matched ? .pass : .fail, durationMs: 0,
+                                expected: expected, actual: outcome.actual)
+        if !outcome.matched {
             let dump = writeAXDump(app, stepId: step.id, dir: options.artifactsDir)
             let shot = options.artifactsDir.appendingPathComponent("\(step.id).png").path
             Screenshot.captureMainDisplay(to: shot)
