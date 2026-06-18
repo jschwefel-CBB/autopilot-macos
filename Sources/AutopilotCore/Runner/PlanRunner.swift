@@ -128,6 +128,9 @@ public struct PlanRunner {
         case .assertPixel:
             return try runAssertPixel(step, app: app, targeting: targeting,
                                       timeoutMs: timeoutMs, intervalMs: intervalMs, options: options)
+        case .assertRegion:
+            return try runAssertRegion(step, app: app, targeting: targeting,
+                                       timeoutMs: timeoutMs, intervalMs: intervalMs, options: options)
         case .menu:
             guard let path = step.args?.menuPath, !path.isEmpty else {
                 throw PlanError.decode("menu needs args.menuPath")
@@ -239,6 +242,54 @@ public struct PlanRunner {
         let actualHex = String(format: "#%02X%02X%02X", lastActual.r, lastActual.g, lastActual.b)
         var result = StepResult(id: step.id, result: matched ? .pass : .fail, durationMs: 0,
                                 expected: "\(hex) ±\(Int(tolerance))", actual: actualHex)
+        if !matched {
+            let shot = options.artifactsDir.appendingPathComponent("\(step.id).png").path
+            Screenshot.captureMainDisplay(to: shot)
+            result.screenshot = shot
+        }
+        return result
+    }
+
+    /// Assert the average or dominant color over a rectangle — robust where a
+    /// single-pixel `assertPixel` is fragile (thin anti-aliased glyphs). The rect
+    /// is `width`×`height` centered on the target (+offset) or at absolute (atX,atY).
+    private func runAssertRegion(_ step: Step, app: AXUIElement, targeting: Targeting,
+                                 timeoutMs: Int, intervalMs: Int, options: RunOptions) throws -> StepResult {
+        let args = step.args
+        guard let hex = args?.color, let expected = PixelColor.parseHex(hex) else {
+            throw PlanError.decode("assertRegion needs args.color (#RRGGBB)")
+        }
+        let tolerance = args?.tolerance ?? 24
+        let w = args?.width ?? 8, h = args?.height ?? 8
+        let dominant = (args?.mode ?? "average") == "dominant"
+
+        let center: CGPoint
+        if let ax = step.target {
+            let ref = try targeting.resolve(ax, app: app, timeoutMs: timeoutMs,
+                                            intervalMs: intervalMs, baseDir: options.planBaseDir)
+            guard let c = actions.point(for: ref) else {
+                throw PlanError.decode("assertRegion target has no resolvable point")
+            }
+            center = CGPoint(x: c.x + CGFloat(args?.offsetX ?? 0), y: c.y + CGFloat(args?.offsetY ?? 0))
+        } else if let ax = args?.atX, let ay = args?.atY {
+            center = CGPoint(x: ax, y: ay)
+        } else {
+            throw PlanError.decode("assertRegion needs a target or absolute at(X,Y)")
+        }
+        let rect = CGRect(x: center.x - CGFloat(w) / 2, y: center.y - CGFloat(h) / 2,
+                          width: CGFloat(w), height: CGFloat(h))
+
+        var lastActual = PixelColor.RGB(r: -1, g: -1, b: -1)
+        let matched = Poller(clock: clock).waitUntil(timeoutMs: timeoutMs, intervalMs: intervalMs) {
+            let pixels = PixelColor.sampleRegion(rect)
+            guard let c = dominant ? PixelColor.dominant(of: pixels) : PixelColor.average(of: pixels) else { return false }
+            lastActual = c
+            return PixelColor.matches(c, expected, tolerance: tolerance)
+        }
+        let actualHex = String(format: "#%02X%02X%02X", lastActual.r, lastActual.g, lastActual.b)
+        var result = StepResult(id: step.id, result: matched ? .pass : .fail, durationMs: 0,
+                                expected: "\(hex) ±\(Int(tolerance)) (\(dominant ? "dominant" : "average"))",
+                                actual: actualHex)
         if !matched {
             let shot = options.artifactsDir.appendingPathComponent("\(step.id).png").path
             Screenshot.captureMainDisplay(to: shot)

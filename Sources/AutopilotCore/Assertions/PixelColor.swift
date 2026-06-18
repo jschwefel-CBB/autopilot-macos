@@ -30,6 +30,51 @@ public enum PixelColor {
         distance(actual, expected) <= tolerance
     }
 
+    /// The average color of a set of pixels (component-wise mean).
+    public static func average(of pixels: [RGB]) -> RGB? {
+        guard !pixels.isEmpty else { return nil }
+        var r = 0, g = 0, b = 0
+        for p in pixels { r += p.r; g += p.g; b += p.b }
+        let n = pixels.count
+        return RGB(r: r / n, g: g / n, b: b / n)
+    }
+
+    /// The dominant color: the most common color after quantizing each channel
+    /// into `buckets` bins (default 16), so near-identical anti-aliased shades
+    /// collapse together. Deterministic — ties broken by lowest packed value.
+    public static func dominant(of pixels: [RGB], buckets: Int = 16) -> RGB? {
+        guard !pixels.isEmpty, buckets > 0 else { return nil }
+        let step = 256 / buckets
+        func quant(_ v: Int) -> Int { min(255, (v / step) * step + step / 2) }
+        var counts: [Int: Int] = [:]      // packed quantized RGB -> count
+        for p in pixels {
+            let key = (quant(p.r) << 16) | (quant(p.g) << 8) | quant(p.b)
+            counts[key, default: 0] += 1
+        }
+        // Most frequent; tie → lowest key for determinism.
+        let best = counts.max { a, b in a.value != b.value ? a.value < b.value : a.key > b.key }!
+        return RGB(r: (best.key >> 16) & 0xFF, g: (best.key >> 8) & 0xFF, b: best.key & 0xFF)
+    }
+
+    /// Sample every pixel in a screen rectangle. Returns row-major RGB list.
+    public static func sampleRegion(_ rect: CGRect) -> [RGB] {
+        guard let image = CGWindowListCreateImage(rect, .optionAll, kCGNullWindowID, []),
+              let data = image.dataProvider?.data,
+              let ptr = CFDataGetBytePtr(data) else { return [] }
+        let w = image.width, h = image.height
+        let bpr = image.bytesPerRow, bpp = image.bitsPerPixel / 8
+        var out: [RGB] = []
+        out.reserveCapacity(w * h)
+        for y in 0..<h {
+            for x in 0..<w {
+                let o = y * bpr + x * bpp
+                // BGRA on macOS.
+                out.append(RGB(r: Int(ptr[o + 2]), g: Int(ptr[o + 1]), b: Int(ptr[o])))
+            }
+        }
+        return out
+    }
+
     /// Read the color of a single screen pixel at `point` (screen coordinates),
     /// or nil if the capture failed. Captures a 1×1 region for efficiency.
     public static func sample(at point: CGPoint) -> RGB? {

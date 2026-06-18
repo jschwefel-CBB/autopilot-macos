@@ -24,4 +24,19 @@ import Foundation
         #expect(PixelColor.matches(nearGold, gold, tolerance: 12))
         #expect(!PixelColor.matches(PixelColor.RGB(r: 0, g: 0, b: 255), gold, tolerance: 12))
     }
+
+    @Test func averageOfPixels() {
+        let px = [PixelColor.RGB(r: 0, g: 0, b: 0), PixelColor.RGB(r: 100, g: 200, b: 50)]
+        #expect(PixelColor.average(of: px) == PixelColor.RGB(r: 50, g: 100, b: 25))
+        #expect(PixelColor.average(of: []) == nil)
+    }
+
+    @Test func dominantIgnoresAntiAliasMinority() {
+        // 8 gold pixels + 2 near-black edge pixels → dominant ≈ gold, not the
+        // average (which the edge pixels would pull down).
+        var px = Array(repeating: PixelColor.RGB(r: 230, g: 180, b: 40), count: 8)
+        px += [PixelColor.RGB(r: 10, g: 10, b: 10), PixelColor.RGB(r: 20, g: 15, b: 5)]
+        let dom = PixelColor.dominant(of: px)!
+        #expect(PixelColor.matches(dom, PixelColor.RGB(r: 230, g: 180, b: 40), tolerance: 24))
+    }
 }

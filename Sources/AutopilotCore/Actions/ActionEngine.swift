@@ -105,7 +105,8 @@ public struct ActionEngine {
             EventSynthesizer.keyChord(virtualKey: chord.virtualKey, flags: chord.flags)
         case .scroll:
             EventSynthesizer.scroll(dx: Int32(args?.deltaX ?? 0), dy: Int32(args?.deltaY ?? 0))
-        case .launch, .terminate, .waitFor, .screenshot, .assert, .assertPixel, .wait, .menu, .drag:
+        case .launch, .terminate, .waitFor, .screenshot, .assert, .assertPixel,
+             .assertRegion, .wait, .menu, .drag:
             break // handled by PlanRunner, not here
         }
     }
