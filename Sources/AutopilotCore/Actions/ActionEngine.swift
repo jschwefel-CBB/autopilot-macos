@@ -78,7 +78,13 @@ public struct ActionEngine {
             if !AXTree.press(el) { throw PlanError.decode("AX press action failed") }
         case .type:
             guard let text = args?.text else { throw PlanError.decode("type needs text") }
-            if let ref, let p = point(for: ref) { EventSynthesizer.click(at: p) } // focus first
+            // Focus the field with a click first — UNLESS focus:false. A focus
+            // click drops the first-responder/selection on fields the app has
+            // already focused (NSSearchField, an opened rename field), sending
+            // the text nowhere. focus:false types into the already-focused field.
+            if args?.focus != false, let ref, let p = point(for: ref) {
+                EventSynthesizer.click(at: p)
+            }
             if args?.clear == true {
                 // Select-all (Cmd-A) then delete, so the field starts empty.
                 EventSynthesizer.keyChord(virtualKey: 0, flags: .maskCommand)   // Cmd-A ('a' == 0)

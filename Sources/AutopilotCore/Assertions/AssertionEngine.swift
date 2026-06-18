@@ -50,7 +50,7 @@ public struct AssertionEngine {
     /// Read the requested property of an AX element as a string.
     public func readProperty(_ property: AssertProperty, from element: AXUIElement) -> String? {
         switch property {
-        case .value: return AXTree.string(element, kAXValueAttribute as String)
+        case .value: return AXTree.valueString(element, kAXValueAttribute as String)
         case .title: return AXTree.string(element, kAXTitleAttribute as String)
         case .enabled: return AXTree.bool(element, kAXEnabledAttribute as String).map { $0 ? "true" : "false" }
         case .focused: return AXTree.bool(element, kAXFocusedAttribute as String).map { $0 ? "true" : "false" }

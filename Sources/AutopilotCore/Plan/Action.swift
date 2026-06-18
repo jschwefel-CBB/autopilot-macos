@@ -27,6 +27,8 @@ public struct ActionArgs: Codable, Equatable, Sendable {
     public var toFiles: [String]?     // drag: file paths to drag onto the target (DnD)
     public var commit: Bool?          // type: press Return after typing to fire end-editing
     public var clear: Bool?           // type: select-all + delete before typing
+    public var focus: Bool?           // type: click to focus first (default true); set
+                                      // false for fields the app already made first responder
     // assertPixel: sample point is target's center + (offsetX,offsetY), or an
     // absolute (atX,atY) when no target is given. Compares to `color` within `tolerance`.
     public var offsetX: Int?

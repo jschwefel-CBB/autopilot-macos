@@ -11,6 +11,23 @@ public enum AXTree {
         return value as? String
     }
 
+    /// Read an attribute as a string, coercing numeric values. A checkbox's
+    /// `AXValue` is an NSNumber (0/1), not a String, so a plain `string()` read
+    /// returns nil; this returns "0"/"1" (etc.) so such state is assertable.
+    public static func valueString(_ element: AXUIElement, _ attribute: String) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success,
+              let value else { return nil }
+        if let s = value as? String { return s }
+        if let n = value as? NSNumber {
+            // Integral numbers (incl. bools) print without a decimal point.
+            if CFGetTypeID(n) == CFBooleanGetTypeID() { return n.boolValue ? "1" : "0" }
+            if n === NSNumber(value: n.intValue) { return "\(n.intValue)" }
+            return "\(n.doubleValue)"
+        }
+        return nil
+    }
+
     /// Read a bool attribute, or nil.
     public static func bool(_ element: AXUIElement, _ attribute: String) -> Bool? {
         var value: CFTypeRef?

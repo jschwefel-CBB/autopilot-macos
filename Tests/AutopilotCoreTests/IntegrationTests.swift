@@ -104,4 +104,43 @@ import ApplicationServices
         let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
         #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
+
+    @Test func checkboxNumericValueIsReadable() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else {
+            Issue.record("TestHostApp.app not built. Run: Fixtures/TestHostApp/make-app.sh")
+            return
+        }
+        killExistingTestHostApps()
+        defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-cb-\(UUID().uuidString)")
+        let plan = Plan(
+            schemaVersion: "1.0",
+            name: "host: checkbox numeric value",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor,
+                     target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                // A checkbox AXValue is an NSNumber — readable now via valueString.
+                Step(id: "assert-unchecked", action: .assert,
+                     target: Selector(identifier: "flagCheckbox"),
+                     assert: Assertion(property: .value, op: .equals, expected: "0")),
+                // Use AX press (robust) rather than a coordinate click on the
+                // small checkbox hit-area.
+                Step(id: "check-it", action: .press,
+                     target: Selector(identifier: "flagCheckbox")),
+                Step(id: "assert-checked", action: .assert,
+                     target: Selector(identifier: "flagCheckbox"),
+                     assert: Assertion(property: .value, op: .equals, expected: "1")),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
 }

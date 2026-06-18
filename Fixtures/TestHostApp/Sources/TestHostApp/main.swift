@@ -32,6 +32,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSTextFieldDelegate 
         okButton.setAccessibilityIdentifier("okButton")
         content.addSubview(okButton)
 
+        // A checkbox so tests can read a numeric (NSNumber) AXValue via `value`.
+        let check = NSButton(checkboxWithTitle: "Flag", target: nil, action: nil)
+        check.frame = NSRect(x: 120, y: 30, width: 120, height: 28)
+        check.setAccessibilityIdentifier("flagCheckbox")
+        content.addSubview(check)
+
         window.contentView = content
         window.center()
         window.makeKeyAndOrderFront(nil)
