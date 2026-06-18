@@ -22,36 +22,67 @@ public struct AXResolver {
         return anyPredicate && ok
     }
 
+    /// How many match descriptors to include in an ambiguity error.
+    static let maxReportedMatches = 5
+
+    /// Read the selector-relevant attributes of one element into a snapshot node.
+    static func node(of el: AXUIElement) -> [String: String] {
+        var node: [String: String] = [:]
+        if let r = AXTree.string(el, kAXRoleAttribute as String) { node["role"] = r }
+        if let id = AXTree.string(el, kAXIdentifierAttribute as String) { node["identifier"] = id }
+        if let t = AXTree.string(el, kAXTitleAttribute as String) { node["title"] = t }
+        if let v = AXTree.string(el, kAXValueAttribute as String) { node["value"] = v }
+        return node
+    }
+
     /// Resolve to exactly one AX element. Throws on zero or multiple matches.
+    /// On ambiguity the error lists up to `maxReportedMatches` descriptors.
     /// `path` and `vision` are handled by the Targeting orchestrator, not here.
     public func resolveOne(in appElement: AXUIElement, selector: Selector) throws -> AXUIElement {
         var matches: [AXUIElement] = []
+        var descriptors: [String] = []
         AXTree.walk(appElement) { el in
-            var node: [String: String] = [:]
-            if let r = AXTree.string(el, kAXRoleAttribute as String) { node["role"] = r }
-            if let id = AXTree.string(el, kAXIdentifierAttribute as String) { node["identifier"] = id }
-            if let t = AXTree.string(el, kAXTitleAttribute as String) { node["title"] = t }
-            if let v = AXTree.string(el, kAXValueAttribute as String) { node["value"] = v }
-            if Self.matches(node: node, selector: selector) { matches.append(el) }
+            if Self.matches(node: Self.node(of: el), selector: selector) {
+                matches.append(el)
+                if descriptors.count < Self.maxReportedMatches {
+                    descriptors.append(Self.describeNode(el))
+                }
+            }
+            return true   // visit the whole tree (need full count for ambiguity)
         }
         let desc = Self.describe(selector)
         if matches.isEmpty { throw TargetingError.notFound(selector: desc) }
-        if matches.count > 1 { throw TargetingError.ambiguous(selector: desc, count: matches.count) }
+        if matches.count > 1 {
+            throw TargetingError.ambiguous(selector: desc, count: matches.count, matches: descriptors)
+        }
         return matches[0]
     }
 
-    /// Count matches (for waitFor present/absent checks) without throwing.
-    public func count(in appElement: AXUIElement, selector: Selector) -> Int {
+    /// Count matches for presence checks, short-circuiting at `stopAt`
+    /// (default 2): presence only needs 0 / 1 / "≥2", so there's no need to
+    /// finish the walk once we've seen `stopAt` matches.
+    public func count(in appElement: AXUIElement, selector: Selector, stopAt: Int = 2) -> Int {
         var n = 0
         AXTree.walk(appElement) { el in
-            var node: [String: String] = [:]
-            if let r = AXTree.string(el, kAXRoleAttribute as String) { node["role"] = r }
-            if let id = AXTree.string(el, kAXIdentifierAttribute as String) { node["identifier"] = id }
-            if let t = AXTree.string(el, kAXTitleAttribute as String) { node["title"] = t }
-            if let v = AXTree.string(el, kAXValueAttribute as String) { node["value"] = v }
-            if Self.matches(node: node, selector: selector) { n += 1 }
+            if Self.matches(node: Self.node(of: el), selector: selector) {
+                n += 1
+                if n >= stopAt { return false }   // enough to decide presence
+            }
+            return true
         }
         return n
+    }
+
+    /// A short human descriptor of an element for ambiguity diagnostics.
+    static func describeNode(_ el: AXUIElement) -> String {
+        let n = node(of: el)
+        var parts: [String] = []
+        if let r = n["role"] { parts.append(r) }
+        if let id = n["identifier"], !id.isEmpty { parts.append("id=\(id)") }
+        if let t = n["title"], !t.isEmpty { parts.append("title=\(t)") }
+        if let v = n["value"], !v.isEmpty { parts.append("value=\(v.prefix(40))") }
+        if let f = AXTree.frame(el) { parts.append("@(\(Int(f.minX)),\(Int(f.minY)))") }
+        return parts.joined(separator: " ")
     }
 
     static func describe(_ s: Selector) -> String {

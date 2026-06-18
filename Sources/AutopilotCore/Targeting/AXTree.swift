@@ -60,25 +60,35 @@ public enum AXTree {
         string(element, kAXMenuItemMarkCharAttribute as String)
     }
 
+    /// Result of a walk: whether traversal was cut short by the node cap.
+    public struct WalkResult { public var truncated: Bool; public var visited: Int }
+
     /// Depth-first pre-order walk, invoking `visit` on every descendant
-    /// (including `root`). Bounded by `maxNodes` as a runaway guard.
+    /// (including `root`). Bounded by `maxNodes`. `visit` returns `true` to
+    /// continue or `false` to stop early. Returns whether the cap truncated it.
+    @discardableResult
     public static func walk(_ root: AXUIElement, maxNodes: Int = 5000,
-                            visit: (AXUIElement) -> Void) {
+                            visit: (AXUIElement) -> Bool) -> WalkResult {
         var stack = [root]
         var count = 0
         while let el = stack.popLast() {
-            visit(el)
+            if !visit(el) { return WalkResult(truncated: false, visited: count) }
             count += 1
-            if count >= maxNodes { return }
+            if count >= maxNodes { return WalkResult(truncated: true, visited: count) }
             stack.append(contentsOf: children(el).reversed())
         }
+        return WalkResult(truncated: false, visited: count)
     }
 
+    /// A snapshot of the subtree plus whether the node cap truncated it.
+    public struct Snapshot { public var nodes: [[String: String]]; public var truncated: Bool }
+
     /// A JSON-serializable snapshot of the subtree (role/identifier/title/value/frame),
-    /// used for failure diagnostics.
-    public static func snapshot(_ root: AXUIElement, maxNodes: Int = 2000) -> [[String: String]] {
+    /// used for failure diagnostics. Carries a `truncated` flag so callers never
+    /// mistake a capped walk for a complete one.
+    public static func snapshot(_ root: AXUIElement, maxNodes: Int = 2000) -> Snapshot {
         var out: [[String: String]] = []
-        walk(root, maxNodes: maxNodes) { el in
+        let result = walk(root, maxNodes: maxNodes) { el in
             var node: [String: String] = [:]
             if let r = string(el, kAXRoleAttribute as String) { node["role"] = r }
             if let id = string(el, kAXIdentifierAttribute as String) { node["identifier"] = id }
@@ -88,7 +98,8 @@ public enum AXTree {
                 node["frame"] = "\(Int(f.minX)),\(Int(f.minY)),\(Int(f.width)),\(Int(f.height))"
             }
             out.append(node)
+            return true
         }
-        return out
+        return Snapshot(nodes: out, truncated: result.truncated)
     }
 }

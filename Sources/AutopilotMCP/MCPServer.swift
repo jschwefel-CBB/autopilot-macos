@@ -77,6 +77,17 @@ final class MCPServer {
         respondToolText(id: id, text: s)
     }
 
+    /// Roles a user can interact with — used by the dump_axtree interactiveOnly filter.
+    static let interactiveRoles: Set<String> = [
+        "AXButton", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton",
+        "AXPopUpButton", "AXMenuButton", "AXMenuItem", "AXSlider", "AXOutline",
+        "AXTable", "AXRow", "AXCell", "AXComboBox", "AXLink", "AXTabGroup",
+    ]
+    static func isInteractive(_ role: String?) -> Bool {
+        guard let role else { return false }
+        return interactiveRoles.contains(role)
+    }
+
     func dumpAXTree(id: Any?, args: [String: Any]) {
         // Authoring aid: launch (or attach) and dump the snapshot.
         guard let bundleId = args["bundleId"] as? String ?? (args["path"] as? String) else {
@@ -89,8 +100,12 @@ final class MCPServer {
             // brief settle, polled via a window check
             _ = Targeting().waitForPresence(Selector(role: "AXWindow"), present: true, app: app, timeoutMs: 4000, intervalMs: 100)
             let snap = AXTree.snapshot(app)
-            let data = try JSONSerialization.data(withJSONObject: snap, options: [.prettyPrinted])
-            respondToolText(id: id, text: String(data: data, encoding: .utf8) ?? "[]")
+            // Optional filter: "interactive" omits static/decorative nodes; default = all.
+            let interactiveOnly = (args["interactiveOnly"] as? Bool) ?? false
+            let nodes = interactiveOnly ? snap.nodes.filter { Self.isInteractive($0["role"]) } : snap.nodes
+            let payload: [String: Any] = ["truncated": snap.truncated, "nodeCount": nodes.count, "nodes": nodes]
+            let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
+            respondToolText(id: id, text: String(data: data, encoding: .utf8) ?? "{}")
         } catch {
             respond(id: id, error: ["code": -32603, "message": String(describing: error)])
         }

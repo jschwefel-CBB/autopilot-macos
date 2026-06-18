@@ -163,10 +163,15 @@ public struct PlanRunner {
 
     private func writeAXDump(_ app: AXUIElement, stepId: String, dir: URL) -> String? {
         let snap = AXTree.snapshot(app)
+        let payload: [String: Any] = [
+            "truncated": snap.truncated,   // never let a capped tree look complete
+            "nodeCount": snap.nodes.count,
+            "nodes": snap.nodes,
+        ]
         let url = dir.appendingPathComponent("\(stepId).axtree.json")
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            let data = try JSONSerialization.data(withJSONObject: snap, options: [.prettyPrinted])
+            let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
             try data.write(to: url)
             return url.path
         } catch { return nil }
