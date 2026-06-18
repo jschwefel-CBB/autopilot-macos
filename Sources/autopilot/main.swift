@@ -41,10 +41,10 @@ struct Run: ParsableCommand {
         }
 
         let artifactsURL = URL(fileURLWithPath: artifacts)
+        // PlanRunner writes report.json into a per-plan subdirectory of this root.
         let report = try PlanRunner().run(plan, options: RunOptions(
             keepGoing: keepGoing, artifactsDir: artifactsURL, planBaseDir: baseDir))
         let reporter = Reporter()
-        try reporter.write(report, to: artifactsURL)
 
         if json {
             FileHandle.standardOutput.write(try reporter.json(report))

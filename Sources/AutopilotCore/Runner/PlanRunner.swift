@@ -22,8 +22,22 @@ public struct PlanRunner {
 
     public init(clock: Clock = SystemClock()) { self.clock = clock }
 
+    /// A filesystem-safe slug for a plan name, for per-plan artifact directories.
+    static func slug(_ name: String) -> String {
+        let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789-_")
+        let lowered = name.lowercased().map { allowed.contains($0) ? $0 : "-" }
+        let collapsed = String(lowered).split(separator: "-", omittingEmptySubsequences: true).joined(separator: "-")
+        return collapsed.isEmpty ? "plan" : collapsed
+    }
+
     /// Parse-and-run is the caller's job for include base-dir reasons; this takes a resolved Plan.
-    public func run(_ plan: Plan, options: RunOptions) throws -> Report {
+    public func run(_ plan: Plan, options callerOptions: RunOptions) throws -> Report {
+        // Namespace artifacts under a per-plan subdirectory so concurrent or
+        // sequential multi-plan runs into one artifacts root don't clobber each
+        // other's report.json / screenshots / AX dumps.
+        var options = callerOptions
+        options.artifactsDir = callerOptions.artifactsDir.appendingPathComponent(Self.slug(plan.name))
+
         var report = Report(plan: plan.name)
         let hasAX = permissions.hasAccessibility()
         let perm = PermissionStatus(accessibility: hasAX, automation: true)
@@ -78,6 +92,10 @@ public struct PlanRunner {
             }
         }
         report.finalize(permissions: perm)
+        report.artifactsDir = options.artifactsDir.path
+        // Write report.json into the per-plan artifacts dir so it travels with
+        // its screenshots/AX dumps and never clobbers another plan's report.
+        try? reporter.write(report, to: options.artifactsDir)
         return report
     }
 

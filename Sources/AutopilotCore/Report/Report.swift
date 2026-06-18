@@ -34,10 +34,12 @@ public struct Report: Codable, Sendable {
     public var durationMs: Int
     public var steps: [StepResult]
     public var permissions: PermissionStatus?
+    /// The per-plan directory where this report and its artifacts were written.
+    public var artifactsDir: String?
 
     public init(plan: String) {
         self.plan = plan; self.result = .pass; self.durationMs = 0
-        self.steps = []; self.permissions = nil
+        self.steps = []; self.permissions = nil; self.artifactsDir = nil
     }
 
     public mutating func add(_ step: StepResult) { steps.append(step) }
