@@ -27,7 +27,7 @@ trap 'rm -rf "$TMPDIR"' EXIT
 echo "==> Cloning tap repo…"
 if [ -n "${GITHUB_TOKEN:-}" ]; then
   # CI: embed token in URL for HTTPS auth
-  AUTH_URL="${TAP_REPO/https:\/\//https:\/\/x-access-token:${GITHUB_TOKEN}@}"
+  AUTH_URL="$(echo "$TAP_REPO" | sed "s|https://|https://x-access-token:${GITHUB_TOKEN}@|")"
   git clone "$AUTH_URL" "$TMPDIR/tap"
 else
   git clone "$TAP_REPO" "$TMPDIR/tap"
