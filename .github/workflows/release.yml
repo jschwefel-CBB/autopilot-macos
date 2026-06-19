@@ -26,9 +26,7 @@ jobs:
           scripts/release.sh "$VERSION"
 
       - name: Notarize
-        # Only runs if Apple credentials are configured as secrets.
-        # Skip gracefully if secrets are absent (e.g. forks, draft releases).
-        if: ${{ secrets.APPLE_ID != '' }}
+        # notarize.sh exits 0 gracefully when credentials are absent.
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
