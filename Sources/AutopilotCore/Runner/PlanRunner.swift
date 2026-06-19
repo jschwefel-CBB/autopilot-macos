@@ -221,6 +221,7 @@ public struct PlanRunner {
         guard let hex = args?.color, let expected = PixelColor.parseHex(hex) else {
             throw PlanError.decode("assertPixel needs args.color (#RRGGBB)")
         }
+        if let err = screenRecordingError(step.id) { return err }
         let tolerance = args?.tolerance ?? 16
 
         // Determine the sample point.
@@ -266,6 +267,7 @@ public struct PlanRunner {
         guard let hex = args?.color, let expected = PixelColor.parseHex(hex) else {
             throw PlanError.decode("assertRegion needs args.color (#RRGGBB)")
         }
+        if let err = screenRecordingError(step.id) { return err }
         let tolerance = args?.tolerance ?? 24
         let w = args?.width ?? 8, h = args?.height ?? 8
         let dominant = (args?.mode ?? "average") == "dominant"
@@ -314,6 +316,7 @@ public struct PlanRunner {
         guard let refRel = args?.reference else {
             throw PlanError.decode("snapshot needs args.reference (path to the reference PNG)")
         }
+        if let err = screenRecordingError(step.id) { return err }
         // Resolve the reference relative to the plan dir (like include/vision).
         let refPath = (options.planBaseDir.map { Targeting.resolveImagePath(refRel, baseDir: $0) }) ?? refRel
         let maxDiff = args?.maxDiff ?? 0.02
@@ -369,6 +372,15 @@ public struct PlanRunner {
         return StepResult(id: step.id, result: ok ? .pass : .fail, durationMs: 0,
                           expected: "≤\(maxDiff) diff", actual: String(format: "%.3f diff", frac),
                           screenshot: ok ? nil : livePath)
+    }
+
+    /// Visual actions require Screen Recording. If it's missing, return a clear
+    /// `.error` rather than letting the capture silently yield no pixels and the
+    /// assertion poll to a misleading `.fail` with a bogus actual color.
+    private func screenRecordingError(_ stepId: String) -> StepResult? {
+        guard !permissions.hasScreenRecording() else { return nil }
+        return StepResult(id: stepId, result: .error, durationMs: 0,
+                          message: permissions.screenRecordingInstructions())
     }
 
     private func writeAXDump(_ app: AXUIElement, stepId: String, dir: URL) -> String? {

@@ -62,6 +62,13 @@ import CoreGraphics
         #expect(PixelColor.matches(px[0], target, tolerance: 4))
     }
 
+    @Test func dominantReturnsActualMeanNotBucketCenter() {
+        // Pure white must read back as ~255, not the old bucket-center cap of 248.
+        let white = Array(repeating: PixelColor.RGB(r: 255, g: 255, b: 255), count: 20)
+        let dom = PixelColor.dominant(of: white)!
+        #expect(dom == PixelColor.RGB(r: 255, g: 255, b: 255))
+    }
+
     @Test func dominantIgnoresAntiAliasMinority() {
         // 8 gold pixels + 2 near-black edge pixels → dominant ≈ gold, not the
         // average (which the edge pixels would pull down).

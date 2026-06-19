@@ -45,15 +45,23 @@ public enum PixelColor {
     public static func dominant(of pixels: [RGB], buckets: Int = 16) -> RGB? {
         guard !pixels.isEmpty, buckets > 0 else { return nil }
         let step = 256 / buckets
-        func quant(_ v: Int) -> Int { min(255, (v / step) * step + step / 2) }
-        var counts: [Int: Int] = [:]      // packed quantized RGB -> count
+        func bucket(_ v: Int) -> Int { v / step }   // bucket index only
+        // Count by bucket key, and accumulate the real pixel sums per bucket so
+        // we can return the ACTUAL mean of the winning bucket — not a bucket
+        // center, which tops out at 248 and systematically darkens bright colors.
+        var counts: [Int: Int] = [:]
+        var sums: [Int: (r: Int, g: Int, b: Int)] = [:]
         for p in pixels {
-            let key = (quant(p.r) << 16) | (quant(p.g) << 8) | quant(p.b)
+            let key = (bucket(p.r) << 16) | (bucket(p.g) << 8) | bucket(p.b)
             counts[key, default: 0] += 1
+            var s = sums[key] ?? (0, 0, 0)
+            s.r += p.r; s.g += p.g; s.b += p.b
+            sums[key] = s
         }
         // Most frequent; tie → lowest key for determinism.
         let best = counts.max { a, b in a.value != b.value ? a.value < b.value : a.key > b.key }!
-        return RGB(r: (best.key >> 16) & 0xFF, g: (best.key >> 8) & 0xFF, b: best.key & 0xFF)
+        let s = sums[best.key]!, n = best.value
+        return RGB(r: s.r / n, g: s.g / n, b: s.b / n)
     }
 
     /// Draw a CGImage into a fixed **sRGB** RGBA8 context and return its pixels.
@@ -79,7 +87,7 @@ public enum PixelColor {
 
     /// Sample every pixel in a screen rectangle, in sRGB. Returns row-major list.
     public static func sampleRegion(_ rect: CGRect) -> [RGB] {
-        guard let image = CGWindowListCreateImage(rect, .optionAll, kCGNullWindowID, []) else { return [] }
+        guard let image = try? ScreenCapture.image(of: rect) else { return [] }
         return sRGBPixels(of: image)
     }
 
@@ -105,7 +113,7 @@ public enum PixelColor {
     /// Read the sRGB color of a single screen pixel at `point`, or nil on failure.
     public static func sample(at point: CGPoint) -> RGB? {
         let rect = CGRect(x: point.x, y: point.y, width: 1, height: 1)
-        guard let image = CGWindowListCreateImage(rect, .optionAll, kCGNullWindowID, []) else { return nil }
+        guard let image = try? ScreenCapture.image(of: rect) else { return nil }
         return sRGBPixels(of: image).first
     }
 }

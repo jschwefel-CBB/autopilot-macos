@@ -304,13 +304,23 @@ struct Doctor: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Check required permissions.")
     func run() throws {
         let perms = Permissions()
+        var missing = false
         if perms.hasAccessibility() {
-            print("Accessibility: OK")
+            print("Accessibility:    OK")
         } else {
-            print("Accessibility: MISSING")
+            print("Accessibility:    MISSING")
             print(perms.accessibilityInstructions())
-            throw ExitCode(3)
+            missing = true
         }
+        // Screen Recording is required for visual actions. Report it but don't
+        // make it fatal on its own — many plans don't use visual assertions.
+        if perms.hasScreenRecording() {
+            print("Screen Recording: OK")
+        } else {
+            print("Screen Recording: MISSING (needed only for assertPixel/assertRegion/snapshot/screenshot)")
+            print(perms.screenRecordingInstructions())
+        }
+        if missing { throw ExitCode(3) }
     }
 }
 
