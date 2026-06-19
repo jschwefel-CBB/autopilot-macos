@@ -24,14 +24,20 @@ public struct Targeting {
             // Vision fallback: only if the selector carries a vision block.
             if let vision = selector.vision {
                 let imagePath = Self.resolveImagePath(vision.image, baseDir: baseDir)
-                let shotPath = NSTemporaryDirectory() + "autopilot-vision-\(UUID().uuidString).png"
-                guard Screenshot.captureMainDisplay(to: shotPath),
-                      let haystack = VisionResolver.grayscaleBuffer(pngPath: shotPath),
+                // Capture the haystack in-memory at POINT resolution (no temp-PNG
+                // leak, and coordinates come back in screen points — so a match
+                // is not 2x off on a Retina display).
+                let mainID = CGMainDisplayID()
+                let screenRect = CGRect(x: 0, y: 0,
+                                        width: CGFloat(CGDisplayPixelsWide(mainID)),
+                                        height: CGFloat(CGDisplayPixelsHigh(mainID)))
+                guard let img = try? ScreenCapture.image(of: screenRect),
+                      let haystack = VisionResolver.grayscaleBuffer(of: img),
                       let needle = VisionResolver.grayscaleBuffer(pngPath: imagePath),
                       let match = VisionResolver.bestMatch(haystack: haystack, needle: needle),
                       match.score >= vision.confidence
                 else { throw lastError }
-                // Template top-left + half needle size => approximate center, in pixel coords.
+                // Top-left + half needle size => center, in screen points.
                 let nW = (needle.first?.count ?? 0), nH = needle.count
                 return .point(CGPoint(x: match.x + nW / 2, y: match.y + nH / 2))
             }

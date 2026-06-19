@@ -236,6 +236,37 @@ import ApplicationServices
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent(refPath).path))
     }
 
+    @Test func withinScopesPresenceChecks() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-within-\(UUID().uuidString)")
+        // okButton exists in the window but NOT inside the menu bar. A `notExists`
+        // assert scoped within the menu bar must PASS — proving count() honors
+        // `within` (before the fix it walked the whole app and would FAIL).
+        let withinMenuBar = Selector(identifier: "okButton", within: Selector(role: "AXMenuBar"))
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: within scope",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                Step(id: "ok-not-in-menubar", action: .assert, target: withinMenuBar,
+                     assert: Assertion(property: .exists, op: .notExists)),
+                // Sanity: okButton DOES exist unscoped.
+                Step(id: "ok-exists", action: .assert, target: Selector(identifier: "okButton"),
+                     assert: Assertion(property: .exists, op: .exists)),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
     @Test func checkboxNumericValueIsReadable() async throws {
         guard AXIsProcessTrusted() else { return }
         let binary = testHostApp()

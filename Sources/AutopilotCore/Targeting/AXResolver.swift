@@ -38,14 +38,16 @@ public struct AXResolver {
     /// Resolve to exactly one AX element. Throws on zero or multiple matches.
     /// On ambiguity the error lists up to `maxReportedMatches` descriptors.
     /// `path` and `vision` are handled by the Targeting orchestrator, not here.
+    /// The walk root for a selector: its `within` parent's subtree if scoped,
+    /// else the whole app. Shared by resolveOne/findAll/count so all honor scope.
+    func rootFor(_ selector: Selector, in appElement: AXUIElement) throws -> AXUIElement {
+        guard let parent = selector.withinSelector else { return appElement }
+        return try resolveOne(in: appElement, selector: parent)
+    }
+
     public func resolveOne(in appElement: AXUIElement, selector: Selector) throws -> AXUIElement {
         // `within`: resolve the parent first, then scope the search to its subtree.
-        let root: AXUIElement
-        if let parent = selector.withinSelector {
-            root = try resolveOne(in: appElement, selector: parent)
-        } else {
-            root = appElement
-        }
+        let root = try rootFor(selector, in: appElement)
         var matches: [AXUIElement] = []
         var descriptors: [String] = []
         AXTree.walk(root) { el in
@@ -75,8 +77,10 @@ public struct AXResolver {
     /// Return a human descriptor for every element matching `selector` — the
     /// authoring `find` helper (selector → what it resolves to).
     public func findAll(in appElement: AXUIElement, selector: Selector) -> [String] {
+        // Honor `within` scope, like resolveOne. Unresolvable parent → no matches.
+        guard let root = try? rootFor(selector, in: appElement) else { return [] }
         var out: [String] = []
-        AXTree.walk(appElement) { el in
+        AXTree.walk(root) { el in
             if Self.matches(node: Self.node(of: el), selector: selector) {
                 out.append(Self.describeNode(el))
             }
@@ -89,8 +93,11 @@ public struct AXResolver {
     /// (default 2): presence only needs 0 / 1 / "≥2", so there's no need to
     /// finish the walk once we've seen `stopAt` matches.
     public func count(in appElement: AXUIElement, selector: Selector, stopAt: Int = 2) -> Int {
+        // Honor `within` scope. An unresolvable parent means the scope doesn't
+        // exist, so nothing inside it can match → count 0.
+        guard let root = try? rootFor(selector, in: appElement) else { return 0 }
         var n = 0
-        AXTree.walk(appElement) { el in
+        AXTree.walk(root) { el in
             if Self.matches(node: Self.node(of: el), selector: selector) {
                 n += 1
                 if n >= stopAt { return false }   // enough to decide presence

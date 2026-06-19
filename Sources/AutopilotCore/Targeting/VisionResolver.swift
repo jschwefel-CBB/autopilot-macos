@@ -54,6 +54,11 @@ public enum VisionResolver {
         return grayscale(from: cg)
     }
 
+    /// Convert an in-memory CGImage to a grayscale buffer (0...1).
+    public static func grayscaleBuffer(of image: CGImage) -> [[Double]]? {
+        grayscale(from: image)
+    }
+
     static func grayscale(from cg: CGImage) -> [[Double]]? {
         let width = cg.width, height = cg.height
         let cs = CGColorSpaceCreateDeviceGray()

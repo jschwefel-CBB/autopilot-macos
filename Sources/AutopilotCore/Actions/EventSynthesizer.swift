@@ -8,9 +8,14 @@ public enum EventSynthesizer {
         let button: CGMouseButton = rightButton ? .right : .left
         let down: CGEventType = rightButton ? .rightMouseDown : .leftMouseDown
         let up: CGEventType = rightButton ? .rightMouseUp : .leftMouseUp
-        for _ in 0..<clickCount {
+        for i in 0..<clickCount {
             let d = CGEvent(mouseEventSource: nil, mouseType: down, mouseCursorPosition: point, mouseButton: button)
             let u = CGEvent(mouseEventSource: nil, mouseType: up, mouseCursorPosition: point, mouseButton: button)
+            // Set the click state (1, 2, …) so macOS recognises a real
+            // double/triple click — without it, N clicks are seen as N singles
+            // and word-select / row-open / rename-activate never fire.
+            d?.setIntegerValueField(.mouseEventClickState, value: Int64(i + 1))
+            u?.setIntegerValueField(.mouseEventClickState, value: Int64(i + 1))
             d?.post(tap: .cghidEventTap)
             u?.post(tap: .cghidEventTap)
         }
