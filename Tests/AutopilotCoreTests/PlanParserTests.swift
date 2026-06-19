@@ -125,6 +125,62 @@ import Foundation
         }
     }
 
+    @Test func keyPressBadChordRejectedAtParse() throws {
+        let json = """
+        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"k","action":"keyPress","target":{"identifier":"e"},"args":{"keys":"cmd+frobnicate"}}]}
+        """.data(using: .utf8)!
+        #expect(throws: PlanError.self) {
+            _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        }
+    }
+
+    @Test func scrollNeedsADelta() throws {
+        let json = """
+        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"s","action":"scroll","target":{"identifier":"e"}}]}
+        """.data(using: .utf8)!
+        #expect(throws: PlanError.self) {
+            _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        }
+    }
+
+    @Test func numericAssertNeedsNumericExpected() throws {
+        let json = """
+        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"a","action":"assert","target":{"identifier":"e"},
+                   "assert":{"property":"value","op":"greaterThan","expected":"notanumber"}}]}
+        """.data(using: .utf8)!
+        #expect(throws: PlanError.self) {
+            _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        }
+    }
+
+    @Test func matchesAssertNeedsValidRegex() throws {
+        let json = """
+        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"a","action":"assert","target":{"identifier":"e"},
+                   "assert":{"property":"value","op":"matches","expected":"[unterminated"}}]}
+        """.data(using: .utf8)!
+        #expect(throws: PlanError.self) {
+            _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        }
+    }
+
+    @Test func validAssertionsAndChordsParse() throws {
+        let json = """
+        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
+         "steps":[
+           {"id":"k","action":"keyPress","target":{"identifier":"e"},"args":{"keys":"cmd+s"}},
+           {"id":"sc","action":"scroll","target":{"identifier":"e"},"args":{"deltaY":-100}},
+           {"id":"g","action":"assert","target":{"identifier":"e"},"assert":{"property":"value","op":"greaterThan","expected":"5"}},
+           {"id":"m","action":"assert","target":{"identifier":"e"},"assert":{"property":"value","op":"matches","expected":"\\\\d+"}}
+         ]}
+        """.data(using: .utf8)!
+        let plan = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        #expect(plan.steps.count == 4)
+    }
+
     @Test func menuNeedsMenuPath() throws {
         let json = """
         {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},

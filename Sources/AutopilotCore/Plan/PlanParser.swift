@@ -88,13 +88,21 @@ public struct PlanParser {
                 throw PlanError.missingArgs(stepId: step.id, action: step.action.rawValue, field: "text")
             }
         case .keyPress:
-            if step.args?.keys == nil {
+            guard let keys = step.args?.keys else {
                 throw PlanError.missingArgs(stepId: step.id, action: step.action.rawValue, field: "keys")
             }
+            // Reject an unparseable chord at parse time, not partway through a
+            // live run after earlier steps already mutated app state.
+            _ = try ActionEngine.parseChord(keys)
+        case .scroll:
+            if step.args?.deltaX == nil && step.args?.deltaY == nil {
+                throw PlanError.missingArgs(stepId: step.id, action: step.action.rawValue, field: "deltaX or deltaY")
+            }
         case .assert:
-            if step.assert == nil {
+            guard let a = step.assert else {
                 throw PlanError.missingArgs(stepId: step.id, action: step.action.rawValue, field: "assert")
             }
+            try validateAssertion(a, stepId: step.id)
         case .wait:
             if step.args?.seconds == nil {
                 throw PlanError.missingArgs(stepId: step.id, action: step.action.rawValue, field: "seconds")
@@ -123,6 +131,31 @@ public struct PlanParser {
             }
         default:
             break
+        }
+    }
+
+    /// Validate an assertion at parse time so a malformed comparison surfaces as
+    /// a plan error rather than masquerading as a normal assertion FAILURE.
+    func validateAssertion(_ a: Assertion, stepId: String) throws {
+        switch a.op {
+        case .exists, .notExists:
+            break   // presence ops need no expected value
+        case .greaterThan, .lessThan:
+            guard let e = a.expected, Double(e) != nil else {
+                throw PlanError.missingArgs(stepId: stepId, action: "assert",
+                                            field: "expected (a number for \(a.op.rawValue))")
+            }
+        case .matches:
+            guard let e = a.expected else {
+                throw PlanError.missingArgs(stepId: stepId, action: "assert", field: "expected (a regex)")
+            }
+            if (try? NSRegularExpression(pattern: e)) == nil {
+                throw PlanError.decode("assert step \(stepId): invalid regex '\(e)'")
+            }
+        case .equals, .notEquals, .contains:
+            if a.expected == nil {
+                throw PlanError.missingArgs(stepId: stepId, action: "assert", field: "expected")
+            }
         }
     }
 }
