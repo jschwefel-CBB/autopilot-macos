@@ -2,11 +2,21 @@ import Foundation
 import AutopilotCore
 
 /// Minimal MCP (JSON-RPC 2.0 over stdio) server exposing autopilot tools.
-final class MCPServer {
+public final class MCPServer {
     let reporter = Reporter()
     var lastReport: Report?
 
-    func run() {
+    /// Where emitted JSON-RPC messages go. Defaults to stdout; tests inject a
+    /// collector so they can assert on the responses without a real pipe.
+    var sink: (String) -> Void
+
+    public init(sink: @escaping (String) -> Void = { line in
+        FileHandle.standardOutput.write(Data((line + "\n").utf8))
+    }) {
+        self.sink = sink
+    }
+
+    public func run() {
         while let line = readLine(strippingNewline: true) {
             if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
             guard let data = line.data(using: .utf8),
@@ -18,7 +28,7 @@ final class MCPServer {
         }
     }
 
-    func handle(_ msg: [String: Any]) {
+    public func handle(_ msg: [String: Any]) {
         let id = msg["id"]
         guard let method = msg["method"] as? String else {
             respond(id: id, error: ["code": -32600, "message": "Invalid Request: missing 'method'"]); return
@@ -229,8 +239,8 @@ final class MCPServer {
     }
 
     func emit(_ msg: [String: Any]) {
-        guard let data = try? JSONSerialization.data(withJSONObject: msg) else { return }
-        FileHandle.standardOutput.write(data)
-        FileHandle.standardOutput.write(Data("\n".utf8))
+        guard let data = try? JSONSerialization.data(withJSONObject: msg),
+              let s = String(data: data, encoding: .utf8) else { return }
+        sink(s)
     }
 }

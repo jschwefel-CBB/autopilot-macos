@@ -236,6 +236,46 @@ import ApplicationServices
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent(refPath).path))
     }
 
+    @Test func liveActionAndAssertCoverage() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-actions-\(UUID().uuidString)")
+        // Exercise several previously-untested live paths in one plan:
+        // keyPress (cmd+a select-all is harmless), setValue, and a spread of
+        // assert operators/properties (matches, notEquals, enabled, title).
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: action+assert coverage",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                // setValue writes the field's AX value directly.
+                Step(id: "setval", action: .setValue, target: Selector(identifier: "nameField"),
+                     args: { var a = ActionArgs(); a.text = "Zed-42"; return a }()),
+                Step(id: "matches", action: .assert, target: Selector(identifier: "nameField"),
+                     assert: Assertion(property: .value, op: .matches, expected: #"Zed-\d+"#)),
+                Step(id: "notEquals", action: .assert, target: Selector(identifier: "nameField"),
+                     assert: Assertion(property: .value, op: .notEquals, expected: "other")),
+                // okButton title is "OK" and it's enabled.
+                Step(id: "title", action: .assert, target: Selector(identifier: "okButton"),
+                     assert: Assertion(property: .title, op: .equals, expected: "OK")),
+                Step(id: "enabled", action: .assert, target: Selector(identifier: "okButton"),
+                     assert: Assertion(property: .enabled, op: .equals, expected: "true")),
+                // keyPress to the field (cmd+a select-all — no destructive effect).
+                Step(id: "keypress", action: .keyPress, target: Selector(identifier: "nameField"),
+                     args: { var a = ActionArgs(); a.keys = "cmd+a"; return a }()),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
     @Test func countAssertionMatchesMultipleElements() async throws {
         guard AXIsProcessTrusted() else { return }
         let binary = testHostApp()

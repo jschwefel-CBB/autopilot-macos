@@ -25,14 +25,24 @@ let package = Package(
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        .target(
+            name: "AutopilotMCPKit",
+            dependencies: ["AutopilotCore"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "AutopilotMCP",
-            dependencies: ["AutopilotCore"],
+            dependencies: ["AutopilotMCPKit"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
             name: "AutopilotCoreTests",
             dependencies: ["AutopilotCore"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "AutopilotMCPKitTests",
+            dependencies: ["AutopilotMCPKit"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]
