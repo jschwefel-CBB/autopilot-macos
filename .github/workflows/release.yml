@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            arch: arm64
+          - os: macos-13
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Build + package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          scripts/release.sh "$VERSION"
+
+      - name: Notarize
+        # Only runs if Apple credentials are configured as secrets.
+        # Skip gracefully if secrets are absent (e.g. forks, draft releases).
+        if: ${{ secrets.APPLE_ID != '' }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          TARBALL="$(ls dist/*.tar.gz)"
+          scripts/notarize.sh "$TARBALL"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: autopilot-${{ matrix.arch }}
+          path: dist/*.tar.gz
+
+  publish:
+    needs: build
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: autopilot-arm64
+          path: dist/
+
+      - name: Download x86_64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: autopilot-x86_64
+          path: dist/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "v${VERSION}" dist/*.tar.gz \
+            --title "v${VERSION}" \
+            --generate-notes
+
+      - name: Update Homebrew tap
+        env:
+          TAP_REPO: ${{ secrets.TAP_REPO }}
+          GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          for TARBALL in dist/*.tar.gz; do
+            ARCH="$(echo "$TARBALL" | grep -oE 'arm64|x86_64')"
+            SHA="$(shasum -a 256 "$TARBALL" | awk '{print $1}')"
+            scripts/update-tap.sh "$VERSION" "$SHA" "$ARCH"
+          done
