@@ -74,6 +74,14 @@ jobs:
       - name: Permission status (doctor)
         run: .build/debug/autopilot doctor || true
 
+      - name: Display resolution (diagnostic)
+        # The TestHostApp window is 900x720. If the runner's virtual display is
+        # narrower/shorter, right-column / lower controls fall off-screen and
+        # coordinate clicks on them miss. This prints the actual resolution so a
+        # layout fix can be sized to fit.
+        run: |
+          system_profiler SPDisplaysDataType 2>/dev/null | grep -iE "Resolution|UI Looks" || echo "no SPDisplays"
+
       - name: Run unified plan (hard gate)
         run: bash scripts/run-unified-plan.sh
 

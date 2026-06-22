@@ -20,10 +20,15 @@ public enum AXTree {
               let value else { return nil }
         if let s = value as? String { return s }
         if let n = value as? NSNumber {
-            // Integral numbers (incl. bools) print without a decimal point.
+            // Bools print as 1/0.
             if CFGetTypeID(n) == CFBooleanGetTypeID() { return n.boolValue ? "1" : "0" }
-            if n === NSNumber(value: n.intValue) { return "\(n.intValue)" }
-            return "\(n.doubleValue)"
+            // Distinguish float from integer by the NSNumber's actual stored
+            // type (CFNumberIsFloatType), NOT by `===` identity against an int
+            // NSNumber — that relies on the small-integer cache, which is an
+            // implementation detail that differs across macOS/runner builds and
+            // made a float 1.0 read back as "1" (e.g. NSProgressIndicator value).
+            if CFNumberIsFloatType(n as CFNumber) { return "\(n.doubleValue)" }
+            return "\(n.intValue)"
         }
         return nil
     }
