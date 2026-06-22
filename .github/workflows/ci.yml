@@ -29,9 +29,57 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build
         run: swift build
-      # Lint any example plans committed in the repo (none yet by default).
+      # Lint the committed unified plan (and any others under uitests/).
+      - name: Lint unified plan
+        run: .build/debug/autopilot lint Fixtures/TestHostApp/test-all-capabilities.json
       - name: Lint plans (if any)
         run: |
           if [ -d uitests ]; then
             .build/debug/autopilot lint uitests || true
           fi
+
+  # End-to-end: run the FULL unified 78-step plan via the CLI against the
+  # TestHostApp fixture — the macOS analogue of the iOS XCUITest / Android
+  # instrumented run. This is a hard gate: any failing step fails the job.
+  #
+  # GUI automation needs Accessibility (all interaction) and Screen Recording
+  # (the 3 visual steps). We grant both to the test process up front. If the
+  # runner image refuses the grant, `autopilot doctor` makes that explicit in
+  # the log rather than failing with an opaque error.
+  unified-plan:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build CLI + fixture
+        run: |
+          swift build
+          Fixtures/TestHostApp/make-app.sh
+
+      - name: Grant Accessibility + Screen Recording (TCC)
+        run: |
+          # On GitHub macOS runners the runner user can write the user TCC db.
+          # Grant the test driver (the terminal/shell process tree) both rights.
+          # kTCCServiceAccessibility and kTCCServiceScreenCapture, allowed=2 (auth).
+          TCC_DB="$HOME/Library/Application Support/com.apple.TCC/TCC.db"
+          sqlite3 "$TCC_DB" "INSERT OR REPLACE INTO access \
+            (service, client, client_type, auth_value, auth_reason, auth_version, flags) \
+            VALUES ('kTCCServiceAccessibility','/bin/bash',1,2,4,1,0);" 2>/dev/null || true
+          sqlite3 "$TCC_DB" "INSERT OR REPLACE INTO access \
+            (service, client, client_type, auth_value, auth_reason, auth_version, flags) \
+            VALUES ('kTCCServiceScreenCapture','/bin/bash',1,2,4,1,0);" 2>/dev/null || true
+          # tccutil reset can also help the session pick up grants.
+          echo "TCC grant attempted (best effort)."
+
+      - name: Permission status (doctor)
+        run: .build/debug/autopilot doctor || true
+
+      - name: Run unified plan (hard gate)
+        run: bash scripts/run-unified-plan.sh
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unified-plan-artifacts
+          path: /tmp/*/artifacts/**
