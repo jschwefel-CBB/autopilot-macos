@@ -15,6 +15,14 @@ The executor runs it mechanically and deterministically — **there is no LLM in
 the execution path**, so the same plan against the same app build produces the
 same result every run.
 
+> **Plans don't have to test.** Assertions are optional. A plan made only of
+> action steps (`click`, `type`, `menu`, `waitFor`, `drag`, …) is an **automation
+> script** that drives an app to accomplish a task rather than verify it — and
+> with `target.attach: true` (see §3) it drives an already-running app from its
+> current state. Everything in this reference applies equally whether you are
+> writing a test plan or an automation plan; just include or omit `assert` steps
+> as needed.
+
 ---
 
 ## 1. The mental model

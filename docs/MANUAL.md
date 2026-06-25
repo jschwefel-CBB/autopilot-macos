@@ -31,6 +31,7 @@ AutoPilot is a declarative macOS GUI testing tool. You write a JSON file that de
 - A CLI tool that reads a JSON plan and drives a macOS app via the Accessibility API.
 - A deterministic executor — no LLM is in the execution path. Plans are reproduced exactly.
 - A reporting tool that tells you, per step, what passed, what failed, and why.
+- A **declarative GUI automation engine**, not only a test runner. The `assert` steps are optional: a plan made only of actions (`click`, `type`, `menu`, `waitFor`, `drag`, …) is an automation script that drives an app to *accomplish* a task. With `target.attach: true` it drives an already-running app from its current state. Testing is the flagship use; automating repeatable Mac workflows is the same engine with the assertions left out.
 
 **What AutoPilot is not:**
 - Not a recorder. You write plans by hand (or with an agent). Recording produces brittle coordinate-based scripts; AutoPilot uses stable AX identifiers.
