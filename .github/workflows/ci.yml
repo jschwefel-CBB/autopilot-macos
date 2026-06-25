@@ -47,7 +47,20 @@ jobs:
   # runner image refuses the grant, `autopilot doctor` makes that explicit in
   # the log rather than failing with an opaque error.
   unified-plan:
-    runs-on: macos-15
+    # Runs on a SELF-HOSTED macOS runner with a real, logged-in GUI session.
+    # Native-macOS GUI automation (synthesized clicks, menu tracking, live AX
+    # reads) needs a real WindowServer; GitHub's hosted runner is headless
+    # ("no SPDisplays") and drops ~2-5% of interactions at random, making the
+    # gate flaky. On a real display the plan passes reliably (verified 10/10).
+    #
+    # SECURITY: only run on pushes to this repo and on PRs from SAME-REPO
+    # branches — NEVER on fork PRs (head.repo.fork), so an untrusted fork
+    # cannot execute code on the self-hosted machine. Outside-collaborator
+    # workflow approval is also required at the repo level (defense in depth).
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false)
+    runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
 
@@ -56,31 +69,12 @@ jobs:
           swift build
           Fixtures/TestHostApp/make-app.sh
 
-      - name: Grant Accessibility + Screen Recording (TCC)
-        run: |
-          # On GitHub macOS runners the runner user can write the user TCC db.
-          # Grant the test driver (the terminal/shell process tree) both rights.
-          # kTCCServiceAccessibility and kTCCServiceScreenCapture, allowed=2 (auth).
-          TCC_DB="$HOME/Library/Application Support/com.apple.TCC/TCC.db"
-          sqlite3 "$TCC_DB" "INSERT OR REPLACE INTO access \
-            (service, client, client_type, auth_value, auth_reason, auth_version, flags) \
-            VALUES ('kTCCServiceAccessibility','/bin/bash',1,2,4,1,0);" 2>/dev/null || true
-          sqlite3 "$TCC_DB" "INSERT OR REPLACE INTO access \
-            (service, client, client_type, auth_value, auth_reason, auth_version, flags) \
-            VALUES ('kTCCServiceScreenCapture','/bin/bash',1,2,4,1,0);" 2>/dev/null || true
-          # tccutil reset can also help the session pick up grants.
-          echo "TCC grant attempted (best effort)."
-
       - name: Permission status (doctor)
-        run: .build/debug/autopilot doctor || true
-
-      - name: Display resolution (diagnostic)
-        # The TestHostApp window is 900x720. If the runner's virtual display is
-        # narrower/shorter, right-column / lower controls fall off-screen and
-        # coordinate clicks on them miss. This prints the actual resolution so a
-        # layout fix can be sized to fit.
-        run: |
-          system_profiler SPDisplaysDataType 2>/dev/null | grep -iE "Resolution|UI Looks" || echo "no SPDisplays"
+        # The self-hosted runner's session must have Accessibility + Screen
+        # Recording granted (System Settings > Privacy & Security) for the
+        # process tree running the runner. doctor reports the status; the plan
+        # run below fails clearly if either is missing.
+        run: .build/debug/autopilot doctor
 
       - name: Run unified plan (hard gate)
         run: bash scripts/run-unified-plan.sh
