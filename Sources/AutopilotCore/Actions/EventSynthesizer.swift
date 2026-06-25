@@ -4,10 +4,25 @@ import ApplicationServices
 
 /// Synthesizes low-level input events via CoreGraphics.
 public enum EventSynthesizer {
+    /// Brief pause so posted CGEvents are processed as DISCRETE interactions.
+    /// Back-to-back down/up with no gap can be coalesced or arrive before the
+    /// target's tracking loop is ready — which on a loaded or headless host
+    /// (e.g. CI) intermittently drops the click/keystroke (a button's action
+    /// never fires; a character is lost). A few ms between phases removes that
+    /// race without meaningfully slowing a run.
+    private static func settle(_ ms: UInt32 = 12) { usleep(ms * 1000) }
+
     public static func click(at point: CGPoint, clickCount: Int = 1, rightButton: Bool = false) {
         let button: CGMouseButton = rightButton ? .right : .left
         let down: CGEventType = rightButton ? .rightMouseDown : .leftMouseDown
         let up: CGEventType = rightButton ? .rightMouseUp : .leftMouseUp
+        // Move the pointer to the target FIRST so the system's cursor position
+        // matches where the click lands — without this, hit-testing can resolve
+        // against a stale cursor location and the click activates nothing.
+        let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
+                           mouseCursorPosition: point, mouseButton: button)
+        move?.post(tap: .cghidEventTap)
+        settle()
         for i in 0..<clickCount {
             let d = CGEvent(mouseEventSource: nil, mouseType: down, mouseCursorPosition: point, mouseButton: button)
             let u = CGEvent(mouseEventSource: nil, mouseType: up, mouseCursorPosition: point, mouseButton: button)
@@ -17,7 +32,9 @@ public enum EventSynthesizer {
             d?.setIntegerValueField(.mouseEventClickState, value: Int64(i + 1))
             u?.setIntegerValueField(.mouseEventClickState, value: Int64(i + 1))
             d?.post(tap: .cghidEventTap)
+            settle()                 // dwell so the press registers as a click
             u?.post(tap: .cghidEventTap)
+            if clickCount > 1 { settle() }
         }
     }
 
@@ -44,7 +61,9 @@ public enum EventSynthesizer {
             down?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &u)
             up?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &u)
             down?.post(tap: .cghidEventTap)
+            settle()
             up?.post(tap: .cghidEventTap)
+            settle()
         }
     }
 
@@ -55,7 +74,9 @@ public enum EventSynthesizer {
         down?.flags = flags
         up?.flags = flags
         down?.post(tap: .cghidEventTap)
+        settle()                     // hold briefly so the keystroke registers
         up?.post(tap: .cghidEventTap)
+        settle()                     // gap before the next key so chars don't drop/reorder
     }
 
     /// Drag from `from` to `to`: mouse-down, intermediate moves (so apps that
