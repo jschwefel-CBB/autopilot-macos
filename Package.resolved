@@ -1,13 +1,13 @@
 {
-  "originHash" : "72c8c22bfbf4a3377c957975574aa4ad3291417c44e205f29b27b54b9bee148d",
+  "originHash" : "45d540657079c6d5df8319c0da24ded30e748a29e9e41be528fb0a5e9a4978d2",
   "pins" : [
     {
       "identity" : "autopilot-core",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jschwefel-CBB/autopilot-core",
       "state" : {
-        "revision" : "d18f5b5eeb9ba9310d100e2afddc4406db43ec91",
-        "version" : "3.0.0"
+        "revision" : "9bdac0f767f9ad6da74ef259c745302d454191aa",
+        "version" : "3.1.0"
       }
     },
     {
