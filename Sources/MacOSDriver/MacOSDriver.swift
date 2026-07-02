@@ -117,6 +117,14 @@ public struct MacOSDriver: AppDriver {
                               to: CGPoint(x: to.x, y: to.y))
     }
 
+    public func performFileDrag(files: [String], to: Point) throws {
+        // AutoPilot is the drag SOURCE (a real NSDraggingSession); CGEvents only
+        // steer the cursor to the drop point. Real cross-process drop — the
+        // destination's real AppKit handlers fire with public.file-url +
+        // NSFilenamesPboardType.
+        try FileDragSource.drop(files: files, at: CGPoint(x: to.x, y: to.y))
+    }
+
     public func selectMenuPath(_ path: [String], app: LaunchedHandle) throws {
         try menuNav.selectPath(path, app: appElement(for: app))
     }

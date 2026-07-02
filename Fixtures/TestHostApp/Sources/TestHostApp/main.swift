@@ -96,6 +96,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSTextFieldDelegate,
     let lockedButton = NSButton(title: "Locked", target: nil, action: nil)
     let disabledLabel = NSTextField(labelWithString: "locked: true")
 
+    // 37-38 dropWell: a real file-drop target + a label whose AX value records
+    // what a drop delivered. Used to test AutoPilot's real file-drop capability
+    // (drag + toFiles) end-to-end against a genuine foreground app.
+    let dropWell = DropWellView()
+    let dropResultLabel = NSTextField(labelWithString: "drop: none")
+
     let fileItems = ["document.pdf", "photo.jpg", "notes.txt"]
     let flagItem = NSMenuItem(title: "Toggle Flag", action: #selector(toggleFlag), keyEquivalent: "")
 
@@ -297,6 +303,21 @@ final class AppController: NSObject, NSApplicationDelegate, NSTextFieldDelegate,
         makeLabel(disabledLabel, id: "disabledLabel", value: "locked: true")
         disabledLabel.frame = NSRect(x: rightX + 140, y: ry + 4, width: 220, height: 20); root.addSubview(disabledLabel)
         ry += 40
+
+        // 37 dropWell + 38 dropResultLabel — real file-drop target.
+        dropWell.setAccessibilityIdentifier("dropWell")
+        dropWell.onDrop = { [weak self] paths, types in
+            guard let self else { return }
+            let names = paths.map { ($0 as NSString).lastPathComponent }.joined(separator: ",")
+            let hasURL = types.contains(.fileURL) ? "url" : "-"
+            let hasNames = types.contains(NSPasteboard.PasteboardType("NSFilenamesPboardType")) ? "names" : "-"
+            // AX value the test asserts on: "drop:<n>:<hasURL>+<hasNames>:<name1,name2>"
+            self.setLabel(self.dropResultLabel, "drop:\(paths.count):\(hasURL)+\(hasNames):\(names)")
+        }
+        dropWell.frame = NSRect(x: rightX, y: ry, width: 200, height: 40); root.addSubview(dropWell)
+        makeLabel(dropResultLabel, id: "dropResultLabel", value: "drop: none")
+        dropResultLabel.frame = NSRect(x: rightX + 210, y: ry + 8, width: 380, height: 20); root.addSubview(dropResultLabel)
+        ry += 50
 
         window.contentView = root
     }
@@ -515,6 +536,47 @@ final class FocusableTextView: NSTextView {
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
         super.mouseDown(with: event)
+    }
+}
+
+/// A real file-drop target. Registers for BOTH the modern file-URL type and the
+/// legacy filenames type (like a real app's drop zone), and reports the dropped
+/// paths + which pasteboard types actually arrived. Used to verify AutoPilot's
+/// real cross-process file-drop capability end-to-end.
+final class DropWellView: NSView {
+    /// Called on a completed drop with the file paths and the pasteboard types present.
+    var onDrop: (([String], [NSPasteboard.PasteboardType]) -> Void)?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        registerForDraggedTypes([.fileURL, NSPasteboard.PasteboardType("NSFilenamesPboardType")])
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.2).cgColor
+        layer?.borderColor = NSColor.systemBlue.cgColor
+        layer?.borderWidth = 1
+        // A bare NSView is not an accessibility element by default, so a selector
+        // targeting it never resolves. Make it a real AX element with a role so
+        // AutoPilot can resolve `dropWell` and compute its drop point.
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
+        setAccessibilityLabel("dropWell")
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    // Ensure the identifier set from the controller survives (some AppKit paths
+    // clear it); belt-and-suspenders alongside setAccessibilityIdentifier.
+    override func isAccessibilityElement() -> Bool { true }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let pb = sender.draggingPasteboard
+        let types = pb.types ?? []
+        let paths = (pb.readObjects(forClasses: [NSURL.self],
+                     options: [.urlReadingFileURLsOnly: true]) as? [URL])?.map(\.path) ?? []
+        onDrop?(paths, types)
+        return true
     }
 }
 
