@@ -64,10 +64,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build CLI + fixture
+      - name: Build CLI + fixture + drag-source helper
         run: |
           swift build
           Fixtures/TestHostApp/make-app.sh
+          # The real file-drop tests need the bundled drag-source helper .app,
+          # located next to the autopilot binary. Only a real display (this
+          # self-hosted runner) can exercise a genuine cross-process drop.
+          Fixtures/make-drag-source-app.sh
 
       - name: Permission status (doctor)
         # The self-hosted runner's session must have Accessibility + Screen
@@ -75,6 +79,12 @@ jobs:
         # process tree running the runner. doctor reports the status; the plan
         # run below fails clearly if either is missing.
         run: .build/debug/autopilot doctor
+
+      - name: Real file-drop tests (needs a real display)
+        # These drive a genuine cross-process NSDraggingSession; they skip
+        # (never fail) when a display/helper is absent, so they only truly run
+        # here on the self-hosted runner.
+        run: swift test --filter FileDragSourceTests
 
       - name: Run unified plan (hard gate)
         run: bash scripts/run-unified-plan.sh
